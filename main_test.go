@@ -61,45 +61,39 @@ func TestCafeCount(t *testing.T) {
 
 	handler := http.HandlerFunc(mainHandle)
 
-	request := []struct {
-		count int
-		want  int
-	}{
-		{0, 0},
-		{1, 1},
-		{2, 2},
-		{100, 0},
-	}
+	for city, list := range cafeList {
+		//Структуру объявил внутри цикла, чтобы сразу задать len(list) и не переопределять в процессе теста
+		request := []struct {
+			count int
+			want  int
+		}{
+			{0, 0},
+			{1, 1},
+			{2, 2},
+			{100, len(list)},
+		}
 
-	for city, _ := range cafeList {
 		for _, v := range request {
 
 			response := httptest.NewRecorder()
-			req := httptest.NewRequest("GET", fmt.Sprintf("/cafe?city=%s&count=%d", city, v.count), nil)
+			req := httptest.NewRequest("GET",
+				fmt.Sprintf("/cafe?city=%s&count=%d", city, v.count), nil)
 
 			handler.ServeHTTP(response, req)
 
-			require.Equal(t, http.StatusOK, response.Code)
+			require.Equal(t, http.StatusOK, response.Code,
+				"city: %s, count: %d - status not Ok", city, v.count)
 
-			cafes := strings.Split(response.Body.String(), ",")
+			cafes := strings.TrimSpace(response.Body.String())
 
-			actualCount := len(cafes)
+			actualCount := 0
 
-			if cafes[0] == "" {
-				actualCount = 0
+			if cafes != "" {
+				actualCount = len(strings.Split(cafes, ","))
 			}
 
-			//if actualCount == 1 {
-			//	cafes[0] = strings.TrimSpace(cafes[0]) // we can use trimspace, if StringSplit for empty string != ""
-			//	if cafes[0] == "" {
-			//		actualCount = 0
-			//	}
-			//}
-
-			if v.count > actualCount {
-				v.want = len(cafeList[city])
-			}
-			assert.Equal(t, v.want, actualCount)
+			assert.Equal(t, v.want, actualCount,
+				"city: %s, count: %d. result: get %d cafes:%v", actualCount, cafes)
 		}
 	}
 }
@@ -115,6 +109,7 @@ func TestCafeSearch(t *testing.T) {
 		{"фасоль", 0},
 		{"кофе", 2},
 		{"вилка", 1},
+		{"Завтрак", 1}, //для проверки регистра
 	}
 
 	for _, v := range request {
@@ -124,23 +119,28 @@ func TestCafeSearch(t *testing.T) {
 
 		handler.ServeHTTP(response, req)
 
-		require.Equal(t, http.StatusOK, response.Code)
+		require.Equal(t, http.StatusOK, response.Code,
+			"Search: '%s' - invalid status", v.search)
 
-		cafes := strings.Split(response.Body.String(), ",")
+		cafeStr := strings.TrimSpace(response.Body.String())
 
-		//actualCount := len(cafes)
+		var cafes []string
 
-		//if cafes[0] == "" {
-		//	actualCount = 0
-		//}
-		actualCount := 0
-
-		for _, cafe := range cafes {
-			if strings.Contains(strings.ToLower(cafe), v.search) {
-				actualCount++
-			}
+		if cafeStr != "" {
+			cafes = strings.Split(cafeStr, ",")
 		}
-		assert.Equal(t, v.wantCount, actualCount)
+		//Проверяем количество кафе
+		assert.Equal(t, v.wantCount, len(cafes),
+			"Search: '%s' - expected %d, got %d", v.wantCount, len(cafes))
+
+		searchLower := strings.ToLower(v.search)
+
+		//Проверяем, что все кафе в списке - содержат поисковую строку
+		for _, cafe := range cafes {
+
+			assert.True(t, strings.Contains((strings.ToLower(cafe)), searchLower))
+
+		}
 	}
 
 }
